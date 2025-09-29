@@ -1,0 +1,6 @@
+FROM python:3.11-slim
+WORKDIR /app
+RUN pip install --no-cache-dir fastmcp
+COPY scripts/mindsdb_http_proxy.py /app/proxy.py
+ENV MINDSDB_SSE_URL=http://mindsdb:47334/mcp/sse
+CMD ["python","-u","/app/proxy.py"]

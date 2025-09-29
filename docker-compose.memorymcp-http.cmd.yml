@@ -1,0 +1,28 @@
+services:
+  memorymcp-http:
+    image: node:20-alpine
+    command:
+      - npx
+      - -y
+      - supergateway
+      - --stdio
+      - "npx -y @allpepper/memory-bank-mcp"
+      - --outputTransport
+      - streamableHttp
+      - --port
+      - "59081"
+      - --streamableHttpPath
+      - /mcp
+    environment:
+      - MEMORY_BANK_ROOT=${MEMORY_BANK_ROOT:-/data/memory-bank}
+    volumes:
+      - ./data/memory-bank:${MEMORY_BANK_ROOT:-/data/memory-bank}
+    healthcheck:
+      test: >
+        wget -qO- --header="accept: application/json"
+        --header="content-type: application/json"
+        --post-data='{"jsonrpc":"2.0","id":"ping","method":"ping","params":{}}'
+        http://127.0.0.1:59081/mcp >/dev/null || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 12

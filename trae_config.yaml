@@ -1,0 +1,34 @@
+model_providers:
+  router_openai:
+    provider: openai
+    base_url: 
+    api_key:  
+
+models:
+  coder_small:
+    model_provider: router_openai
+    model: qwen2.5-coder:7b
+    temperature: 0.2
+    max_tokens: 2048
+
+  coder_big:
+    model_provider: router_openai
+    # Use the MLX model id your server lists (router will route it)
+    model: qwen3-42b-mlx
+    temperature: 0.3
+    max_tokens: 4096
+
+agents:
+  main:
+    model: coder_big
+    tools: [bash, sequentialthinking, str_replace_based_edit_tool, task_done]
+    max_steps: 150
+    enable_lakeview: true
+
+  fast_fix:
+    model: coder_small
+    tools: [bash, sequentialthinking, str_replace_based_edit_tool, task_done]
+    max_steps: 80
+    enable_lakeview: true
+
+run_dir: ./trae_runs
