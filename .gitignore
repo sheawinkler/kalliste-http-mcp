@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# build/merge artifacts
+.compose.merged.yml
+
+# local venvs & logs
+.venv-*
+logs/
