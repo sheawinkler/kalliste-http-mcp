@@ -83,3 +83,69 @@ mem-status:
 >     docker inspect -f '{{json .Config.Labels}}' "$$cid" | jq -r '."com.docker.compose.config-files"'; \
 >   fi; \
 > done
+
+MEM_FILES += \
+  -f docker-compose.memorymcp-http.debug.yml
+
+MEM_FILES += \
+  -f docker-compose.memorymcp-http.cmd.yml
+# --- MCP HTTP-only config (standardized to /mcp/) ---
+MCP_URL_8011 ?= http://127.0.0.1:8011/mcp/
+MCP_VER      ?= 2025-06-18
+MCP_ACCEPT   ?= application/json
+
+.PHONY: mem-ping
+mem-ping:
+> @echo "→ initialize ($(MCP_URL_8011))"
+> @curl -fsS $(MCP_URL_8011) \
+>   -H 'accept: $(MCP_ACCEPT)' \
+>   -H 'content-type: application/json' \
+>   -H 'MCP-Protocol-Version: $(MCP_VER)' \
+>   -d '{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocolVersion":"$(MCP_VER)","clientInfo":{"name":"L337-gpt5","version":"dev"}}}' \
+>   | jq -r '.result?.serverInfo?.name // .error?.message // "ok"'
+> @echo "→ tools/list"
+> @curl -fsS $(MCP_URL_8011) \
+>   -H 'accept: $(MCP_ACCEPT)' \
+>   -H 'content-type: application/json' \
+>   -H 'MCP-Protocol-Version: $(MCP_VER)' \
+>   -d '{"jsonrpc":"2.0","id":"tools-1","method":"tools/list","params":{}}' \
+>   | jq -C .
+
+.PHONY: mem
+mem: mem-restart mem-ping mem-ps mem-logs-short
+
+override MCP_ACCEPT := application/json, text/event-stream
+
+# --- MCP HTTP-only standard (no stdio, no SSE opens) ---
+override MCP_URL_8011 := http://127.0.0.1:8011/mcp/
+override MCP_VER      := 2025-06-18
+override MCP_ACCEPT   := application/json, text/event-stream
+override MCP_CLIENT_NAME := kalliste-alpha
+override MCP_CLIENT_VER  := dev
+
+.PHONY: mem-ping
+mem-ping:
+> @echo "→ initialize ($(MCP_URL_8011))"
+> @b=$$(mktemp -t mcp_init.XXXX.json); \
+> c=$$(curl -sS -w '%{http_code}' -o $$b \
+>   -H 'accept: $(MCP_ACCEPT)' \
+>   -H 'content-type: application/json' \
+>   -H 'MCP-Protocol-Version: $(MCP_VER)' \
+>   -d "{\"jsonrpc\":\"2.0\",\"id\":\"init-1\",\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"$(MCP_VER)\",\"clientInfo\":{\"name\":\"$(MCP_CLIENT_NAME)\",\"version\":\"$(MCP_CLIENT_VER)\"}}}" \
+>   $(MCP_URL_8011)); \
+> echo "HTTP $$c"; \
+> (jq -C . $$b 2>/dev/null || cat $$b); rm -f $$b
+> @echo "→ tools/list"
+> @b=$$(mktemp -t mcp_tools.XXXX.json); \
+> c=$$(curl -sS -w '%{http_code}' -o $$b \
+>   -H 'accept: $(MCP_ACCEPT)' \
+>   -H 'content-type: application/json' \
+>   -H 'MCP-Protocol-Version: $(MCP_VER)' \
+>   -d '{"jsonrpc":"2.0","id":"tools-1","method":"tools/list","params":{}}' \
+>   $(MCP_URL_8011)); \
+> echo "HTTP $$c"; \
+> (jq -C . $$b 2>/dev/null || cat $$b); rm -f $$b
+# MAKE-END-MEM-PING
+
+MEM_FILES += \
+  -f docker-compose.health.memorymcp-http.node.yml
