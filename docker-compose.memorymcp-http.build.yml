@@ -1,18 +1,9 @@
 services:
   memorymcp-http:
-    image: node:20-alpine
-    command:
-      - npx
-      - -y
-      - supergateway
-      - --stdio
-      - "npx -y @allpepper/memory-bank-mcp"
-      - --outputTransport
-      - streamableHttp
-      - --port
-      - "59081"
-      - --streamableHttpPath
-      - /mcp
+    build:
+      context: .
+      dockerfile: Dockerfile.memorymcp
+    image: l337/memorymcp:local
     volumes:
       - ./data/memory-bank:/data/memory-bank
     environment:
