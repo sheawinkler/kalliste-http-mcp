@@ -1,0 +1,8 @@
+FROM node:20-alpine
+ENV NODE_ENV=production
+RUN npm i -g supergateway @allpepper/memory-bank-mcp
+ENV MEMORY_BANK_ROOT=/data/memory-bank
+WORKDIR /app
+VOLUME ["/data/memory-bank"]
+EXPOSE 59081
+CMD ["supergateway","--stdio","memory-bank-mcp","--outputTransport","streamableHttp","--port","59081","--streamableHttpPath","/mcp"]
