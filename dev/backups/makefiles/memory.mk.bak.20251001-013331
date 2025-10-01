@@ -1,7 +1,7 @@
 .RECIPEPREFIX := >
 SHELL := /bin/bash
 COMPOSE := docker compose
-MEM_FILES := \
+
 MEM_FILES := \
   -f docker-compose.yml \
   -f docker-compose.override.http.yml \
