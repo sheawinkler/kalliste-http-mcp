@@ -1,0 +1,187 @@
+=== kalliste-alpha :: repo cleanup report (pre-move) ===
+time: 2025-10-01 01:26:05 -0600
+
+repo root: /Users/sheawinkler/.mcp-servers/mem_mcp_lobehub
+
+ACTIVE compose files (from mk/memory.mk MEM_FILES):
+     1	docker-compose.yml
+     2	docker-compose.override.http.yml
+     3	docker-compose.override.vols.yml
+     4	docker-compose.override.stackfix.yml
+     5	docker-compose.mcp-qdrant.http.yml
+     6	docker-compose.memorymcp-http.build.yml
+     7	docker-compose.mcp-proxy.yml
+     8	docker-compose.mindsdb.yml
+     9	docker-compose.mindsdb-http-proxy.yml
+    10	docker-compose.mindsdb.volumes.yml
+    11	docker-compose.volumes.fix.yml
+    12	docker-compose.disable.legacy.yml
+    13	docker-compose.memorymcp-http.cmdforce.yml
+    14	docker-compose.mcp-proxy.depfix.yml
+    15	docker-compose.health.disable.yml
+    16	> $(COMPOSE) $(MEM_FILES) logs -f --tail=200
+    17	docker-compose.memorymcp-http.port.yml
+    18	docker-compose.memorymcp-http.port.yml
+    19	docker-compose.memorymcp-http.debug.yml
+    20	docker-compose.memorymcp-http.cmd.yml
+    21	docker-compose.health.memorymcp-http.node.yml
+
+Root-level docker-compose*.yml currently present:
+     1	docker-compose.disable.legacy.yml
+     2	docker-compose.health.disable.yml
+     3	docker-compose.health.memorymcp-http.node.yml
+     4	docker-compose.mcp-proxy.depfix.yml
+     5	docker-compose.mcp-proxy.yml
+     6	docker-compose.mcp-qdrant.health.yml
+     7	docker-compose.mcp-qdrant.http.yml
+     8	docker-compose.memory.yml
+     9	docker-compose.memorymcp-http.build.yml
+    10	docker-compose.memorymcp-http.cmd.yml
+    11	docker-compose.memorymcp-http.cmdforce.yml
+    12	docker-compose.memorymcp-http.debug.yml
+    13	docker-compose.memorymcp-http.port.yml
+    14	docker-compose.mindsdb-http-proxy.health.yml
+    15	docker-compose.mindsdb-http-proxy.yml
+    16	docker-compose.mindsdb.volumes.yml
+    17	docker-compose.mindsdb.yml
+    18	docker-compose.override.http.yml
+    19	docker-compose.override.stackfix.yml
+    20	docker-compose.override.vols.yml
+    21	docker-compose.volumes.fix.yml
+    22	docker-compose.yml
+
+Moved ACTIVE compose files -> infra/compose/:
+ - 
+
+mk/memory.mk was updated: no
+
+Remaining root docker-compose*.yml:
+     1	docker-compose.disable.legacy.yml
+     2	docker-compose.health.disable.yml
+     3	docker-compose.health.memorymcp-http.node.yml
+     4	docker-compose.mcp-proxy.depfix.yml
+     5	docker-compose.mcp-proxy.yml
+     6	docker-compose.mcp-qdrant.health.yml
+     7	docker-compose.mcp-qdrant.http.yml
+     8	docker-compose.memory.yml
+     9	docker-compose.memorymcp-http.build.yml
+    10	docker-compose.memorymcp-http.cmd.yml
+    11	docker-compose.memorymcp-http.cmdforce.yml
+    12	docker-compose.memorymcp-http.debug.yml
+    13	docker-compose.memorymcp-http.port.yml
+    14	docker-compose.mindsdb-http-proxy.health.yml
+    15	docker-compose.mindsdb-http-proxy.yml
+    16	docker-compose.mindsdb.volumes.yml
+    17	docker-compose.mindsdb.yml
+    18	docker-compose.override.http.yml
+    19	docker-compose.override.stackfix.yml
+    20	docker-compose.override.vols.yml
+    21	docker-compose.volumes.fix.yml
+    22	docker-compose.yml
+
+infra/compose/ docker-compose*.yml:
+     1	
+
+Compose images using ':latest' (pin these to explicit versions):
+docker-compose.yml:3:    image: qdrant/qdrant:latest
+docker-compose.yml:20:    image: mindsdb/mindsdb:latest
+docker-compose.memory.yml:28:    image: ghcr.io/tbxark/mcp-proxy:latest
+scripts/kalliste.sh:20:    image: ghcr.io/tbxark/mcp-proxy:latest
+docker-compose.mcp-proxy.yml:3:    image: ghcr.io/tbxark/mcp-proxy:latest
+docker-compose.mindsdb.yml:3:    image: mindsdb/mindsdb:latest
+docker-compose.override.http.yml:48:    image: ghcr.io/tbxark/mcp-proxy:latest
+docker-compose.override.http.yml:61:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.override.yml.bak.20250923-015405:3:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.override.yml.bak.20250923-015405:11:    image: letta/letta:latest
+development/docker-compose-bak/docker-compose.mcp-proxy.yml.bak.1758751896:3:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.override.http.yml.bak.20250923-162640:24:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.override.http.yml.bak.20250923-162640:36:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-141102:3:    image: qdrant/qdrant:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-141102:20:    image: mindsdb/mindsdb:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-141102:40:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-141102:61:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-141102:74:    image: ollama/ollama:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-141102:88:    image: letta/letta:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-141102:111:    image: ghcr.io/langfuse/langfuse:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-141102:123:    image: ghcr.io/promptfoo/promptfoo:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-181451:3:    image: qdrant/qdrant:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-181451:20:    image: mindsdb/mindsdb:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-181451:40:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-181451:60:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-181451:72:    image: ollama/ollama:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-181451:86:    image: letta/letta:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-181451:109:    image: ghcr.io/langfuse/langfuse:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-181451:121:    image: ghcr.io/promptfoo/promptfoo:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250921-102607:3:    image: qdrant/qdrant:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250921-102607:20:    image: mindsdb/mindsdb:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250921-102607:40:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250921-102607:61:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250921-102607:74:    image: ollama/ollama:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250921-102607:88:    image: letta/letta:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250921-102607:111:    image: ghcr.io/langfuse/langfuse:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250921-102607:123:    image: ghcr.io/promptfoo/promptfoo:latest
+development/docker-compose-bak/docker-compose.mindsdb-http-proxy.build.yml:3:    image: local/mindsdb-http-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250923-155839:3:    image: qdrant/qdrant:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250923-155839:20:    image: mindsdb/mindsdb:latest
+development/docker-compose-bak/docker-compose.mcp-proxy.ensure.yml:3:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.mcp-qdrant.image.yml:3:    image: ghcr.io/qdrant/mcp-server-qdrant:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250923-155443:3:    image: qdrant/qdrant:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250923-155443:20:    image: mindsdb/mindsdb:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140431:3:    image: qdrant/qdrant:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140431:20:    image: mindsdb/mindsdb:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140431:40:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140431:61:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140431:74:    image: ollama/ollama:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140431:88:    image: letta/letta:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140431:111:    image: ghcr.io/langfuse/langfuse:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140431:123:    image: ghcr.io/promptfoo/promptfoo:latest
+development/docker-compose-bak/docker-compose.yml.bak:3:    image: qdrant/qdrant:latest
+development/docker-compose-bak/docker-compose.yml.bak:20:    image: mindsdb/mindsdb:latest
+development/docker-compose-bak/docker-compose.override.yml:3:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.override.yml:11:    image: letta/letta:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250923-155519:3:    image: qdrant/qdrant:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250923-155519:20:    image: mindsdb/mindsdb:latest
+development/docker-compose-bak/docker-compose.composefix.yml:5:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.composefix.yml:7:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.override.http.yml.bak.20250924-035804:48:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.override.http.yml.bak.20250924-035804:61:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140839:3:    image: qdrant/qdrant:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140839:20:    image: mindsdb/mindsdb:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140839:40:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140839:61:    image: ghcr.io/tbxark/mcp-proxy:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140839:74:    image: ollama/ollama:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140839:88:    image: letta/letta:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140839:111:    image: ghcr.io/langfuse/langfuse:latest
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140839:123:    image: ghcr.io/promptfoo/promptfoo:latest
+
+Services with a healthcheck block (FYI):
+docker-compose.mindsdb-http-proxy.yml:9:    healthcheck:
+docker-compose.mcp-qdrant.health.yml:3:    healthcheck:
+docker-compose.override.http.yml:17:    healthcheck:
+docker-compose.override.http.yml:39:    healthcheck:
+docker-compose.health.memorymcp-http.node.yml:3:    healthcheck:
+development/docker-compose-bak/docker-compose.mcp-qdrant.health.yml:3:    healthcheck:
+docker-compose.mindsdb.yml:8:    healthcheck:
+docker-compose.mcp-qdrant.http.yml:14:    healthcheck:
+development/docker-compose-bak/docker-compose.memorymcp-http.fix.yml:25:    healthcheck:
+development/docker-compose-bak/docker-compose.mcp-qdrant.cmd.yml:8:    healthcheck:
+docker-compose.mindsdb-http-proxy.health.yml:3:    healthcheck:
+development/docker-compose-bak/docker-compose.memorymcp-http.hotfix.yml:13:    healthcheck:
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140839:79:    healthcheck:
+docker-compose.memory.yml:19:    healthcheck:
+development/docker-compose-bak/docker-compose.yml.bak.20250922-141102:79:    healthcheck:
+development/docker-compose-bak/docker-compose.override.http.yml.bak.20250923-162640:16:    healthcheck:
+docker-compose.memorymcp-http.build.yml:11:    healthcheck:
+development/docker-compose-bak/docker-compose.yml.bak.20250922-181451:77:    healthcheck:
+development/docker-compose-bak/docker-compose.mindsdb-http-proxy.build.yml:9:    healthcheck:
+development/docker-compose-bak/docker-compose.mcp-proxy.dep.yml:5:    healthcheck:
+development/docker-compose-bak/docker-compose.mindsdb-http-proxy.health.yml:3:    healthcheck:
+development/docker-compose-bak/docker-compose.yml.bak.20250921-102607:79:    healthcheck:
+development/docker-compose-bak/docker-compose.memorymcp-http.health.yml:3:    healthcheck:
+development/docker-compose-bak/docker-compose.override.http.yml.bak.20250924-035804:17:    healthcheck:
+development/docker-compose-bak/docker-compose.override.http.yml.bak.20250924-035804:39:    healthcheck:
+development/docker-compose-bak/docker-compose.yml.bak.20250922-140431:79:    healthcheck:
+
+Compose config check: ERROR (check mk/memory.mk MEM_FILES paths)
+
+END OF REPORT
