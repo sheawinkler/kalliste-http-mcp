@@ -95,8 +95,6 @@ mk/memory.mk            # make targets (mem, mem-ps, mem-logs, mem-up-fg, mem-pi
 .compose.args           # auto-generated: ordered -f list for compose
 ~~~
 
----
-
 ## Make targets (selection)
 
 - `mem` — compose up (detached)  
