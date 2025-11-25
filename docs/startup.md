@@ -28,6 +28,7 @@ Key services and ports:
 - Langfuse UI: `http://127.0.0.1:15510`
 - Promptfoo UI: `http://127.0.0.1:15500`
 - MCP hub (tbxark proxy): `http://127.0.0.1:53130`
+- Orchestrator API: `http://127.0.0.1:8075`
 
 ## 3. Logs & debugging
 

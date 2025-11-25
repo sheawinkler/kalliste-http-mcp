@@ -171,6 +171,20 @@ services:
       retries: 10
     restart: unless-stopped
 
+  memmcp-orchestrator:
+    build: { context: ., dockerfile: Dockerfile.orchestrator }
+    depends_on:
+      memorymcp-http:
+        condition: service_healthy
+    environment:
+      MEMMCP_HTTP_URL: http://memorymcp-http:59081/mcp
+      LANGFUSE_URL: http://langfuse:3000
+      LANGFUSE_API_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      QDRANT_URL: http://qdrant:6333
+      ORCH_QDRANT_COLLECTION: memmcp_notes
+    ports: ["${ORCHESTRATOR_PORT:-8075}:8075"]
+    restart: unless-stopped
+
 volumes:
   qdrant_storage: {}
   mongo_data: {}

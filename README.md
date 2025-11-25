@@ -95,6 +95,19 @@ mk/memory.mk            # make targets (mem, mem-ps, mem-logs, mem-up-fg, mem-pi
 .compose.args           # auto-generated: ordered -f list for compose
 ~~~
 
+### Operator dashboard
+
+- `memmcp-dashboard/` — Next.js UI that surfaces memory projects/files, runs health checks via the orchestrator, and lets you append notes without touching the CLI.
+- To run locally:
+
+```bash
+cd memmcp-dashboard
+npm install
+MEMMCP_ORCHESTRATOR_URL=http://localhost:8075 npm run dev
+```
+
+The dashboard proxies every request through `/api/memory/*` so browsers never need to set MCP headers.
+
 ## Make targets (selection)
 
 - `mem` — compose up (detached)  
@@ -102,6 +115,7 @@ mk/memory.mk            # make targets (mem, mem-ps, mem-logs, mem-up-fg, mem-pi
 - `mem-logs` — follow logs (`-f --tail=200`)  
 - `mem-up-fg` — foreground up (dev)  
 - `mem-ping` — HTTP JSON-RPC ping to `/mcp/` with headers
+- `mem-orchestrator` — `docker compose up -d memmcp-orchestrator`
 
 > If Make warns “overriding recipe,” you have duplicate targets—keep the **last** definition in `mk/memory.mk`.
 
@@ -112,6 +126,7 @@ mk/memory.mk            # make targets (mem, mem-ps, mem-logs, mem-up-fg, mem-pi
 - **“.env variables defaulting to blank”** — Compose reads `.env` from the **project directory** (folder of the **first** `-f` file). We symlink `infra/compose/.env → ../../.env`. Alternatively run with `--project-directory . --env-file .env`.  
 - **“Port 6333 already allocated”** — We ship an override to **remove** host publishing of `6333` (Compose `!reset`) or remap to `6334:6333` on older Compose. Internally, keep using `http://qdrant:6333`.  
 - **Services stuck at “created/starting”** — `docker compose $(cat .compose.args) logs -f memorymcp-http mcp-qdrant mindsdb-http-proxy` and look for healthcheck errors or missing deps.
+- **Langfuse restarting with ClickHouse errors** — ensure `.env` has `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_MIGRATION_URL=clickhouse://...:9000/<db>`, `CLICKHOUSE_CLUSTER_ENABLED=false`, `NEXTAUTH_URL`, and `SALT`.
 
 ---
 
