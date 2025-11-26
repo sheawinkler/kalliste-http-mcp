@@ -1,4 +1,5 @@
 FROM python:3.11-slim
 WORKDIR /app
 RUN pip install --no-cache-dir mcp-server-qdrant
-CMD ["mcp-server-qdrant","--transport","streamable-http","--host","0.0.0.0","--port","8002"]
+# The server chooses HOST/PORT via env (PORT defaults to 8000). Compose injects PORT=8002.
+CMD ["mcp-server-qdrant","--transport","streamable-http"]

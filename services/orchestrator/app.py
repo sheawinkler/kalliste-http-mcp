@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import re
 import uuid
 from typing import Any
 
@@ -17,12 +16,91 @@ LANGFUSE_API_KEY = os.getenv("LANGFUSE_API_KEY")
 QDRANT_URL = os.getenv("QDRANT_URL", "http://qdrant:6333")
 QDRANT_COLLECTION = os.getenv("ORCH_QDRANT_COLLECTION", "memmcp_notes")
 
+EMBEDDING_PROVIDER = os.getenv("ORCH_EMBED_PROVIDER", os.getenv("EMBEDDING_PROVIDER", "cheap")).lower()
+EMBEDDING_MODEL = os.getenv("ORCH_EMBED_MODEL", os.getenv("EMBEDDING_MODEL", "nomic-embed-text"))
+EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL", os.getenv("OPENAI_API_BASE"))
+EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", os.getenv("OPENAI_API_KEY"))
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+FALLBACK_EMBED_DIM = int(os.getenv("ORCH_EMBED_DIM", os.getenv("EMBEDDING_DIM", "32")))
+
 MCP_HEADERS = {
     "content-type": "application/json",
     "accept": "application/json, text/event-stream",
     "MCP-Protocol-Version": "2024-11-05",
     "MCP-Transport": "streamable-http",
 }
+
+
+class OrchestratorError(RuntimeError):
+    """Intentional failure we can bubble up with a helpful hint."""
+
+
+def _cheap_embedding(text: str, vector_size: int) -> list[float]:
+    """Cheap deterministic embedding used when no provider is configured."""
+
+    base = [0.0] * vector_size
+    encoded = text.encode("utf-8")
+    if not encoded:
+        return base
+    for idx, char in enumerate(encoded):
+        base[idx % vector_size] += char / 255.0
+    norm = max(sum(base), 1e-6)
+    return [round(val / norm, 6) for val in base]
+
+
+async def _openai_like_embedding(text: str) -> list[float]:
+    if not EMBEDDING_BASE_URL:
+        raise OrchestratorError("EMBEDDING_BASE_URL is not set for openai provider")
+    url = EMBEDDING_BASE_URL.rstrip("/") + "/v1/embeddings"
+    headers = {"content-type": "application/json"}
+    if EMBEDDING_API_KEY:
+        headers["authorization"] = f"Bearer {EMBEDDING_API_KEY}"
+    payload = {"model": EMBEDDING_MODEL, "input": text}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(url, json=payload, headers=headers)
+    if resp.status_code != 200:
+        raise OrchestratorError(f"Embedding request failed: {resp.text}")
+    data = resp.json()
+    payloads = data.get("data") or []
+    if not payloads:
+        raise OrchestratorError("Embedding provider returned no data")
+    return payloads[0]["embedding"]
+
+
+async def _ollama_embedding(text: str) -> list[float]:
+    url = OLLAMA_BASE_URL.rstrip("/") + "/api/embeddings"
+    payload = {"model": EMBEDDING_MODEL, "prompt": text}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(url, json=payload)
+    if resp.status_code != 200:
+        raise OrchestratorError(f"Ollama embedding failed: {resp.text}")
+    data = resp.json()
+    vector = data.get("embedding")
+    if vector is None and data.get("data"):
+        vector = data["data"][0].get("embedding")
+    if vector is None:
+        raise OrchestratorError("Ollama response missing embedding field")
+    return vector
+
+
+async def embed_text(text: str) -> list[float]:
+    provider = EMBEDDING_PROVIDER
+    if provider in ("openai", "lmstudio", "openai-compatible"):
+        try:
+            return await _openai_like_embedding(text)
+        except OrchestratorError:
+            raise
+        except Exception as exc:  # pragma: no cover - network failure
+            raise OrchestratorError(str(exc)) from exc
+    if provider == "ollama":
+        try:
+            return await _ollama_embedding(text)
+        except OrchestratorError:
+            raise
+        except Exception as exc:  # pragma: no cover
+            raise OrchestratorError(str(exc)) from exc
+    # default fallback
+    return _cheap_embedding(text, FALLBACK_EMBED_DIM)
 
 app = FastAPI(title="memMCP orchestrator", version="0.1.0")
 
@@ -75,13 +153,27 @@ async def list_files(project: str) -> list[str]:
     return result.get("content", [])
 
 
-async def ensure_qdrant_collection() -> None:
+async def ensure_qdrant_collection(vector_size: int) -> None:
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(f"{QDRANT_URL}/collections/{QDRANT_COLLECTION}")
     if resp.status_code == 200:
+        body = resp.json()
+        current_size = (
+            body.get("result", {})
+            .get("config", {})
+            .get("params", {})
+            .get("vectors", {})
+            .get("size")
+        )
+        if current_size and current_size != vector_size:
+            raise RuntimeError(
+                "Qdrant collection dimension mismatch: "
+                f"existing={current_size}, required={vector_size}. "
+                "Drop the collection or adjust the embedding model."
+            )
         return
     schema = {
-        "vectors": {"size": 32, "distance": "Cosine"},
+        "vectors": {"size": vector_size, "distance": "Cosine"},
     }
     async with httpx.AsyncClient(timeout=30.0) as client:
         create = await client.put(
@@ -91,22 +183,14 @@ async def ensure_qdrant_collection() -> None:
         raise RuntimeError(f"Failed to create Qdrant collection: {create.text}")
 
 
-def _cheap_embedding(text: str) -> list[float]:
-    # Deterministic toy embedding based on character codes (placeholder until a real model is plugged in)
-    base = [0.0] * 32
-    for idx, char in enumerate(text.encode("utf-8")):
-        base[idx % 32] += char / 255.0
-    norm = max(sum(base), 1e-6)
-    return [round(val / norm, 6) for val in base]
-
-
 async def push_to_qdrant(project: str, file_name: str, content: str) -> None:
-    await ensure_qdrant_collection()
+    vector = await embed_text(content)
+    await ensure_qdrant_collection(len(vector))
     payload = {
         "points": [
             {
                 "id": str(uuid.uuid4()),
-                "vector": _cheap_embedding(content),
+                "vector": vector,
                 "payload": {
                     "project": project,
                     "file": file_name,

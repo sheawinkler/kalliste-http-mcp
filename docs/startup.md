@@ -5,7 +5,12 @@ The stack now runs entirely from the project root via Docker Compose.
 ## 1. Bring everything up
 
 ```bash
+# full stack (COMPOSE_PROFILES=core,llm,analytics,observability by default)
 docker compose up -d --build
+
+# minimal footprint (core profile only)
+docker compose --profile core up -d --build
+# or make up-core
 ```
 
 If you need a clean slate before starting:
@@ -24,9 +29,9 @@ Key services and ports:
 
 - Qdrant API: `http://127.0.0.1:6333/readyz`
 - Memory MCP (supergateway): `http://127.0.0.1:59081/mcp`
-- MindsDB HTTP proxy (FastMCP): `http://127.0.0.1:8004/mcp`
-- Langfuse UI: `http://127.0.0.1:15510`
-- Promptfoo UI: `http://127.0.0.1:15500`
+- MindsDB HTTP proxy (FastMCP): `http://127.0.0.1:8004/mcp` *(analytics profile)*
+- Langfuse UI: `http://127.0.0.1:15510` *(observability profile)*
+- Promptfoo UI: `http://127.0.0.1:15500` *(observability profile)*
 - MCP hub (tbxark proxy): `http://127.0.0.1:53130`
 - Orchestrator API: `http://127.0.0.1:8075`
 
@@ -45,6 +50,8 @@ docker compose down
 ```
 
 Volumes are persisted for Qdrant, MindsDB, Langfuse Postgres/ClickHouse, Mongo (memory bank), and Letta.
+
+To reboot after a laptop shutdown or Docker Desktop restart, just bring the stack back up with the same profile command (e.g., `docker compose --profile core up -d`). Named volumes (`qdrant_storage`, `mongo_data`, `memory_bank_data`, etc.) keep all memories, embeddings, and traces intact between sessions.
 
 ## Memory MCP troubleshooting note
 

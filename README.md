@@ -108,6 +108,11 @@ MEMMCP_ORCHESTRATOR_URL=http://localhost:8075 npm run dev
 
 The dashboard proxies every request through `/api/memory/*` so browsers never need to set MCP headers.
 
+## Automation helpers
+
+- `scripts/install_mcp_clients.sh` — copies the MCP client templates in `configs/` to the default Windsurf, Cline, Cursor, and Claude locations (backs up existing files automatically).
+- `scripts/deploy_hosted_core.sh <domain> <email>` — brings up the `core` Compose profile and launches a Caddy reverse proxy with HTTPS termination for `/mcp` and `/status`.
+
 ## Make targets (selection)
 
 - `mem` — compose up (detached)  
@@ -145,8 +150,9 @@ The dashboard proxies every request through `/api/memory/*` so browsers never ne
 - **Open core:** repo open for local usage; hosted **Kalliste Cloud** on subscription  
   - Free local: HTTP MCP, vector memory, proxy, single-node  
   - Pro/Team: SSO/SAML, RBAC, metering/quotas, managed scaling, SLAs, priority support  
-- **License:** recommend **BSL 1.1** (converts to Apache-2.0 at a future change date). If you need OSI copyleft for the repo, consider **AGPLv3** with commercial exceptions for hosted use.  
-  > The `LICENSE` file in this repo is the source of truth.
+- **License:** the repo ships under **Business Source License 1.1** with a change date to Apache-2.0 (see `LICENSE`). The Additional Use Grant allows personal/internal use up to 2 M JSON-RPC calls/month but explicitly forbids running Kalliste as a managed service without a commercial license.  
+  - In short: use it locally for free, but contact Shea for any hosted/monetized offering.  
+  - The change date automatically transitions the codebase to Apache-2.0 in 2028, ensuring long-term openness without sacrificing today’s monetization path.
 
 ---
 
