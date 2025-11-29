@@ -1,5 +1,7 @@
 import { ProjectsPanel } from "../components/ProjectsPanel";
 import { NewEntryForm } from "../components/NewEntryForm";
+import { TelemetryPanel } from "../components/TelemetryPanel";
+import { CompoundingPanel } from "../components/CompoundingPanel";
 
 async function fetchStatus() {
   const res = await fetch("/api/memory/status", { cache: "no-store" });
@@ -9,8 +11,38 @@ async function fetchStatus() {
   return res.json();
 }
 
+async function fetchTelemetryMetrics() {
+  try {
+    const res = await fetch("/api/telemetry/metrics", { cache: "no-store" });
+    if (!res.ok) {
+      return null;
+    }
+    return res.json();
+  } catch (err) {
+    console.warn("Telemetry metrics fetch failed", err);
+    return null;
+  }
+}
+
+async function fetchTradingMetrics() {
+  try {
+    const res = await fetch("/api/telemetry/trading", { cache: "no-store" });
+    if (!res.ok) {
+      return null;
+    }
+    return res.json();
+  } catch (err) {
+    console.warn("Trading metrics fetch failed", err);
+    return null;
+  }
+}
+
 export default async function DashboardPage() {
-  const status = await fetchStatus();
+  const [status, telemetry, trading] = await Promise.all([
+    fetchStatus(),
+    fetchTelemetryMetrics(),
+    fetchTradingMetrics(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -32,6 +64,8 @@ export default async function DashboardPage() {
           ))}
         </div>
       </section>
+      <CompoundingPanel trading={trading} />
+      <TelemetryPanel queueMetrics={telemetry} tradingMetrics={trading} />
       <ProjectsPanel />
       <NewEntryForm />
     </div>
