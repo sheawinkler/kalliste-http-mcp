@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import uuid
-from typing import Any
+from collections import deque
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -22,6 +26,13 @@ EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL", os.getenv("OPENAI_API_BASE"
 EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", os.getenv("OPENAI_API_KEY"))
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 FALLBACK_EMBED_DIM = int(os.getenv("ORCH_EMBED_DIM", os.getenv("EMBEDDING_DIM", "32")))
+TRADING_HISTORY_LIMIT = int(os.getenv("TRADING_HISTORY_LIMIT", "256"))
+TRADING_HISTORY_PATH = Path(
+    os.getenv(
+        "TRADING_HISTORY_PATH",
+        str(Path(__file__).resolve().parent / "data" / "trading_metrics.ndjson"),
+    )
+)
 
 MCP_HEADERS = {
     "content-type": "application/json",
@@ -103,6 +114,76 @@ async def embed_text(text: str) -> list[float]:
     return _cheap_embedding(text, FALLBACK_EMBED_DIM)
 
 app = FastAPI(title="memMCP orchestrator", version="0.1.0")
+logger = logging.getLogger("memmcp.orchestrator")
+telemetry_state: Dict[str, Any] = {
+    "updatedAt": None,
+    "queueDepth": 0,
+    "batchSize": 0,
+    "totals": {
+        "enqueued": 0,
+        "dropped": 0,
+        "batches": 0,
+        "flushedEvents": 0,
+    },
+}
+trading_metrics_state: Dict[str, Any] = {
+    "updatedAt": None,
+    "openPositions": 0,
+    "totalValueUsd": 0.0,
+    "unrealizedPnl": 0.0,
+    "realizedPnl": 0.0,
+    "dailyPnl": 0.0,
+    "positions": [],
+}
+trading_history = deque(maxlen=TRADING_HISTORY_LIMIT)
+trading_history_lock = asyncio.Lock()
+
+
+def _apply_trading_snapshot(snapshot: Dict[str, Any]) -> None:
+    timestamp = snapshot.get("timestamp")
+    if isinstance(timestamp, datetime):
+        trading_metrics_state["updatedAt"] = timestamp.isoformat()
+    else:
+        trading_metrics_state["updatedAt"] = timestamp
+    trading_metrics_state["openPositions"] = snapshot.get("open_positions", 0)
+    trading_metrics_state["totalValueUsd"] = snapshot.get("total_value_usd", 0.0)
+    trading_metrics_state["unrealizedPnl"] = snapshot.get("unrealized_pnl", 0.0)
+    trading_metrics_state["realizedPnl"] = snapshot.get("realized_pnl", 0.0)
+    trading_metrics_state["dailyPnl"] = snapshot.get("daily_pnl", 0.0)
+    trading_metrics_state["positions"] = snapshot.get("positions", [])
+
+
+def _load_trading_history() -> None:
+    if not TRADING_HISTORY_PATH.exists():
+        return
+    try:
+        with TRADING_HISTORY_PATH.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                snapshot = json.loads(line)
+                trading_history.append(snapshot)
+        if trading_history:
+            _apply_trading_snapshot(trading_history[-1])
+    except Exception as exc:  # pragma: no cover - best-effort load
+        logger.warning("Failed to load trading history: %s", exc)
+
+
+async def _persist_trading_snapshot(snapshot: Dict[str, Any]) -> None:
+    def _append(path: Path, payload: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(payload)
+
+    line = json.dumps(snapshot) + "\n"
+    try:
+        await asyncio.to_thread(_append, TRADING_HISTORY_PATH, line)
+    except Exception as exc:  # pragma: no cover - disk full, etc.
+        logger.warning("Failed to persist trading snapshot: %s", exc)
+
+
+_load_trading_history()
 
 
 class MemoryWrite(BaseModel):
@@ -115,6 +196,23 @@ class TrajectoryIngest(BaseModel):
     project: str
     summary: str
     trajectory: dict[str, Any]
+
+
+class TelemetryMetrics(BaseModel):
+    timestamp: datetime
+    queueDepth: int = Field(ge=0)
+    batchSize: int = Field(ge=0)
+    totals: Dict[str, int]
+
+
+class TradingMetrics(BaseModel):
+    timestamp: datetime
+    open_positions: int
+    total_value_usd: float
+    unrealized_pnl: float
+    realized_pnl: float
+    daily_pnl: float
+    positions: list[dict[str, Any]]
 
 
 async def _call_mcp(payload: dict[str, Any]) -> dict[str, Any]:
@@ -305,3 +403,48 @@ async def status():
         services.append({"name": "qdrant", "healthy": False, "detail": str(exc)})
 
     return {"services": services}
+
+
+@app.post("/telemetry/metrics")
+async def ingest_metrics(payload: TelemetryMetrics):
+    telemetry_state["updatedAt"] = payload.timestamp.isoformat()
+    telemetry_state["queueDepth"] = payload.queueDepth
+    telemetry_state["batchSize"] = payload.batchSize
+    totals = telemetry_state["totals"]
+    totals.update({
+        "enqueued": payload.totals.get("enqueued", totals.get("enqueued", 0)),
+        "dropped": payload.totals.get("dropped", totals.get("dropped", 0)),
+        "batches": payload.totals.get("batches", totals.get("batches", 0)),
+        "flushedEvents": payload.totals.get("flushedEvents", totals.get("flushedEvents", 0)),
+    })
+    return {"ok": True}
+
+
+@app.get("/telemetry/metrics")
+async def get_metrics():
+    return telemetry_state
+
+
+@app.post("/telemetry/trading")
+async def ingest_trading(payload: TradingMetrics):
+    snapshot = payload.model_dump()
+    snapshot["timestamp"] = payload.timestamp.isoformat()
+    _apply_trading_snapshot(snapshot)
+    async with trading_history_lock:
+        trading_history.append(snapshot)
+        history_size = len(trading_history)
+    await _persist_trading_snapshot(snapshot)
+    return {"ok": True, "historySize": history_size}
+
+
+@app.get("/telemetry/trading")
+async def get_trading_metrics():
+    return trading_metrics_state
+
+
+@app.get("/telemetry/trading/history")
+async def get_trading_history(limit: int = 50):
+    limit = max(1, min(limit, TRADING_HISTORY_LIMIT))
+    async with trading_history_lock:
+        items = list(trading_history)[-limit:]
+    return {"history": items}
