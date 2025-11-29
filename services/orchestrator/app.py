@@ -33,6 +33,13 @@ TRADING_HISTORY_PATH = Path(
         str(Path(__file__).resolve().parent / "data" / "trading_metrics.ndjson"),
     )
 )
+STRATEGY_HISTORY_LIMIT = int(os.getenv("STRATEGY_HISTORY_LIMIT", "256"))
+STRATEGY_HISTORY_PATH = Path(
+    os.getenv(
+        "STRATEGY_HISTORY_PATH",
+        str(Path(__file__).resolve().parent / "data" / "strategy_metrics.ndjson"),
+    )
+)
 
 MCP_HEADERS = {
     "content-type": "application/json",
@@ -137,6 +144,12 @@ trading_metrics_state: Dict[str, Any] = {
 }
 trading_history = deque(maxlen=TRADING_HISTORY_LIMIT)
 trading_history_lock = asyncio.Lock()
+strategy_metrics_state: Dict[str, Any] = {
+    "updatedAt": None,
+    "strategies": [],
+}
+strategy_history = deque(maxlen=STRATEGY_HISTORY_LIMIT)
+strategy_history_lock = asyncio.Lock()
 
 
 def _apply_trading_snapshot(snapshot: Dict[str, Any]) -> None:
@@ -186,6 +199,44 @@ async def _persist_trading_snapshot(snapshot: Dict[str, Any]) -> None:
 _load_trading_history()
 
 
+def _apply_strategy_snapshot(snapshot: Dict[str, Any]) -> None:
+    strategy_metrics_state["updatedAt"] = snapshot.get("timestamp")
+    strategy_metrics_state["strategies"] = snapshot.get("strategies", [])
+
+
+def _load_strategy_history() -> None:
+    if not STRATEGY_HISTORY_PATH.exists():
+        return
+    try:
+        with STRATEGY_HISTORY_PATH.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line:
+                    continue
+                snapshot = json.loads(line)
+                strategy_history.append(snapshot)
+        if strategy_history:
+            _apply_strategy_snapshot(strategy_history[-1])
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Failed to load strategy history: %s", exc)
+
+
+async def _persist_strategy_snapshot(snapshot: Dict[str, Any]) -> None:
+    def _append(path: Path, payload: str) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(payload)
+
+    line = json.dumps(snapshot) + "\n"
+    try:
+        await asyncio.to_thread(_append, STRATEGY_HISTORY_PATH, line)
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Failed to persist strategy snapshot: %s", exc)
+
+
+_load_strategy_history()
+
+
 class MemoryWrite(BaseModel):
     projectName: str = Field(..., description="Project identifier")
     fileName: str = Field(..., description="File name inside the project")
@@ -213,6 +264,20 @@ class TradingMetrics(BaseModel):
     realized_pnl: float
     daily_pnl: float
     positions: list[dict[str, Any]]
+
+
+class StrategyEntry(BaseModel):
+    name: str
+    capital: float
+    win_rate: float | None = None
+    daily_pnl: float | None = None
+    notes: str | None = None
+    memory_ref: str | None = None
+
+
+class StrategyMetrics(BaseModel):
+    timestamp: datetime
+    strategies: list[StrategyEntry]
 
 
 async def _call_mcp(payload: dict[str, Any]) -> dict[str, Any]:
@@ -447,4 +512,29 @@ async def get_trading_history(limit: int = 50):
     limit = max(1, min(limit, TRADING_HISTORY_LIMIT))
     async with trading_history_lock:
         items = list(trading_history)[-limit:]
+    return {"history": items}
+
+
+@app.post("/telemetry/strategies")
+async def ingest_strategy_metrics(payload: StrategyMetrics):
+    snapshot = payload.model_dump()
+    snapshot["timestamp"] = payload.timestamp.isoformat()
+    _apply_strategy_snapshot(snapshot)
+    async with strategy_history_lock:
+        strategy_history.append(snapshot)
+        history_size = len(strategy_history)
+    await _persist_strategy_snapshot(snapshot)
+    return {"ok": True, "historySize": history_size}
+
+
+@app.get("/telemetry/strategies")
+async def get_strategy_metrics():
+    return strategy_metrics_state
+
+
+@app.get("/telemetry/strategies/history")
+async def get_strategy_history(limit: int = 50):
+    limit = max(1, min(limit, STRATEGY_HISTORY_LIMIT))
+    async with strategy_history_lock:
+        items = list(strategy_history)[-limit:]
     return {"history": items}
