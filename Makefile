@@ -6,6 +6,8 @@ SHELL := /bin/bash
 .ONESHELL:
 .RECIPEPREFIX := >
 .DEFAULT_GOAL := launch
+PROFILES ?=
+PROFILE_ARGS := $(strip $(foreach profile,$(PROFILES),--profile $(profile)))
 
 # OS detect (for future use)
 UNAME_S := $(shell uname -s)
@@ -13,14 +15,16 @@ BASE_OS := $(if $(filter $(UNAME_S),Darwin),mac,linux)
 
 # Core compose invocation (env-driven)
 ENV_FILE ?= .env
-DC := docker compose --env-file $(ENV_FILE)
+DC := docker compose -f docker-compose.yml
 
-.PHONY: help launch all up down status ps logs build rebuild pull clean prune             kalliste init qdrant-init mindsdb-seed letta-seed models-pull             proxy-status doctor
+.PHONY: help launch all up up-core down status ps logs build rebuild pull clean prune             kalliste init qdrant-init mindsdb-seed letta-seed models-pull             proxy-status doctor
 
 help:
 > echo "Targets:"
 > echo "  launch (default): compose up + proxy + memory init"
 > echo "  up/down/status/logs/build/rebuild/pull/clean/prune/ps"
+> echo "    (set PROFILES=core,llm to limit docker compose)"
+> echo "  up-core: helper for PROFILES=core docker compose up"
 > echo "  models-pull: pull local Ollama models (optional)"
 > echo "  kalliste: configure & start mcp-proxy on :9090"
 > echo "  init: qdrant-init + optional mindsdb/letta seeds"
@@ -33,8 +37,11 @@ all: launch
 
 # ---- Compose lifecycle ----
 up:
-> echo ">> compose up (build) with $(ENV_FILE)"
-> $(DC) up -d --build
+> if [ -n "$(PROFILES)" ]; then echo ">> compose up (build) [profiles: $(PROFILES)] with $(ENV_FILE)"; else echo ">> compose up (build) with $(ENV_FILE)"; fi
+> $(DC) $(PROFILE_ARGS) up -d --build
+
+up-core:
+> $(MAKE) up PROFILES="core"
 
 down:
 > $(DC) down
@@ -232,12 +239,12 @@ router-wait:
 > scripts/wait_for_http.sh "$$ROUTER_BASE/models" 60
 
 # ----- Trae (runs from local source checkout) -----
-TRAE_DIR ?= tools/trae-agent
+TRAE_DIR ?= $(HOME)/.trae_agent
 TRAE_CFG ?= $(PWD)/trae_config.yaml
 
 .PHONY: trae-install trae-config trae-run-small trae-run-big trae-shell
 trae-install:
-> test -d $(TRAE_DIR) || (mkdir -p tools && git clone https://github.com/bytedance/trae-agent.git $(TRAE_DIR))
+> test -d $(TRAE_DIR) || git clone https://github.com/bytedance/trae-agent.git $(TRAE_DIR)
 > cd $(TRAE_DIR) && uv sync --all-extras
 
 trae-config:

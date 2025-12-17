@@ -1,18 +1,21 @@
 {
-  "http": {
-    "host": "0.0.0.0",
-    "port": 9090
+  "mcpProxy": {
+    "type": "http",
+    "addr": ":53130",
+    "baseURL": "http://127.0.0.1:53130"
   },
-  "clients": [
-    {
-      "name": "mindsdb",
+  "clients": {
+    "mindsdb": {
       "type": "http",
-      "serverUrl": "http://mindsdb-http-proxy:8004"
+      "serverUrl": "http://mindsdb-http-proxy:8004/mcp"
     },
-    {
-      "name": "memorymcp",
+    "memorymcp": {
       "type": "http",
       "serverUrl": "http://memorymcp-http:59081/mcp"
+    },
+    "qdrant": {
+      "type": "http",
+      "serverUrl": "http://mcp-qdrant:8000/mcp"
     }
-  ]
+  }
 }

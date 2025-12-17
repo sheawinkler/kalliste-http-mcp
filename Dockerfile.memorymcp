@@ -1,8 +1,15 @@
 FROM node:20-alpine
-ENV NODE_ENV=production
-RUN npm i -g supergateway @allpepper/memory-bank-mcp
-ENV MEMORY_BANK_ROOT=/data/memory-bank
+ENV npm_config_yes=true \
+    npm_config_update_notifier=false \
+    NODE_OPTIONS="--dns-result-order=ipv4first" \
+    PATH="/usr/local/bin:${PATH}"
+RUN apk add --no-cache bash \
+ && npm i -g supergateway @allpepper/memory-bank-mcp
 WORKDIR /app
-VOLUME ["/data/memory-bank"]
-EXPOSE 59081
-CMD ["supergateway","--stdio","memory-bank-mcp","--outputTransport","streamableHttp","--port","59081","--streamableHttpPath","/mcp"]
+# IMPORTANT: run the gateway and spawn the memory-bank MCP via stdio; expose as streamable HTTP on /mcp
+# PORT is provided via env MEMORYMCP_HTTP_PORT (default 59081)
+CMD sh -lc "supergateway \
+  --stdio 'npx -y @allpepper/memory-bank-mcp' \
+  --outputTransport streamableHttp \
+  --port ${MEMORYMCP_HTTP_PORT:-59081} \
+  --streamableHttpPath /mcp"

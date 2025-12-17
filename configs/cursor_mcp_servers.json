@@ -1,8 +1,9 @@
 {
-  "mcpServers": {
-    "memmcp": {
+  "servers": [
+    {
+      "name": "memmcp",
       "type": "http",
       "serverUrl": "http://127.0.0.1:53130/mcp"
     }
-  }
+  ]
 }

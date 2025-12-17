@@ -1,3 +1,9 @@
+# Override compose files and DC for simplified setup
+COMPOSE_FILES := docker-compose.yml
+DC := docker compose -f $(COMPOSE_FILES)
+b :=
+export b
+
 .RECIPEPREFIX := >
 SHELL := /bin/bash
 COMPOSE := docker compose

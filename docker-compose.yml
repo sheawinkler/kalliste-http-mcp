@@ -1,0 +1,209 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports: ["6333:6333"]
+    volumes: ["qdrant_storage:/qdrant/storage"]
+    restart: unless-stopped
+    profiles: ["core"]
+
+  mongo:
+    image: mongo:7
+    volumes: ["mongo_data:/data/db"]
+    restart: unless-stopped
+    profiles: ["core"]
+
+  # Qdrant MCP (Streamable HTTP)
+  mcp-qdrant:
+    build: { context: ., dockerfile: dockerfile }
+    depends_on: [qdrant]
+    environment:
+      QDRANT_URL: ${QDRANT_URL}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+    expose: ["8000"]
+    profiles: ["core"]
+    healthcheck:
+      test:
+        ["CMD-SHELL",
+         "python -c \"import socket,sys; s=socket.create_connection(('127.0.0.1',8000),2); s.close()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  mindsdb:
+    image: mindsdb/mindsdb:latest
+    environment:
+      MINDSDB_APIS: ${MINDSDB_APIS}
+    ports:
+      - "127.0.0.1:${MINDS_HTTP_PORT:-47334}:47334"
+      - "127.0.0.1:${MINDSDB_MCP_PORT:-47337}:47337"
+    volumes: ["mindsdb_data:/root/.mindsdb"]
+    restart: unless-stopped
+    profiles: ["analytics"]
+
+  # Memory Bank via npx supergateway -> HTTP/streamable
+  memorymcp-http:
+    build: { context: ., dockerfile: Dockerfile.memorymcp }
+    depends_on: [mongo]
+    environment:
+      MEMORYMCP_HTTP_PORT: ${MEMORYMCP_HTTP_PORT:-59081}
+      MEMORY_BANK_ROOT: /data/memory-bank
+      MONGODB_URI: ${MONGODB_URI}
+    volumes: ["memory_bank_data:/data"]
+    ports: ["${SUPERGW_PORT:-59081}:${MEMORYMCP_HTTP_PORT:-59081}"]
+    profiles: ["core"]
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 ${MEMORYMCP_HTTP_PORT:-59081}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # MindsDB SSE -> HTTP using FastMCP
+  mindsdb-http-proxy:
+    build: { context: ., dockerfile: Dockerfile.mindsdb-http-proxy }
+    depends_on: [mindsdb]
+    environment:
+      MINDSDB_SSE_URL: ${MINDSDB_SSE_URL:-http://mindsdb:47334/mcp/sse}
+    ports: ["${MINDSDB_HTTP_PROXY_PORT:-8004}:8004"]
+    healthcheck:
+      test:
+        ["CMD-SHELL",
+         "python -c \"import socket,sys; s=socket.create_connection(('127.0.0.1',8004),2); s.close()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    profiles: ["analytics"]
+
+  # MCP Hub — single front door (one port; serves /mcp and /sse)
+  mcp-hub:
+    image: ghcr.io/tbxark/mcp-proxy:v0.39.1
+    depends_on: [mcp-qdrant, memorymcp-http]
+    volumes:
+      - ./configs/mcp-hub.config.json:/config/config.json:ro
+    command: ["--config", "/config/config.json"]
+    ports: ["${MCP_HUB_PORT}:${MCP_HUB_PORT}"]
+    healthcheck:
+      test:
+        ["CMD-SHELL",
+         "bash -lc 'timeout 3 bash -lc \"exec 3<>/dev/tcp/127.0.0.1/${MCP_HUB_PORT:-53130}; exec 3>&-\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    profiles: ["core"]
+
+  # Ollama (local, free LLMs)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports: ["11434:11434"]  # expose to host for testing
+    volumes: ["${HOME}/.ollama:/root/.ollama"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    profiles: ["llm"]
+
+  # Letta (MemGPT successor) — prefers Ollama if OLLAMA_BASE_URL set
+  letta:
+    image: letta/letta:latest
+    container_name: letta
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OLLAMA_BASE_URL: "http://ollama:11434" #via DNS
+    ports: ["${LETTA_PORT}:8283"]
+    volumes: ["letta_pg:/var/lib/postgresql/data"]
+    restart: unless-stopped
+    profiles: ["llm"]
+
+  # Observability: Langfuse (app + Postgres)
+  lf-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${LF_DB_PASS}
+      POSTGRES_DB: ${LF_DB_NAME}
+      POSTGRES_USER: ${LF_DB_USER}
+    volumes: ["lf_pgdata:/var/lib/postgresql/data"]
+    restart: unless-stopped
+    profiles: ["observability"]
+
+  lf-clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    volumes: ["clickhouse_data:/var/lib/clickhouse"]
+    restart: unless-stopped
+    profiles: ["observability"]
+
+  langfuse:
+    image: ghcr.io/langfuse/langfuse:latest
+    depends_on: [lf-postgres, lf-clickhouse]
+    environment:
+      DATABASE_URL: postgres://${LF_DB_USER}:${LF_DB_PASS}@${LF_DB_HOST}:5432/${LF_DB_NAME}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL}
+      CLICKHOUSE_MIGRATION_URL: ${CLICKHOUSE_MIGRATION_URL:-${CLICKHOUSE_URL}}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DATABASE: ${CLICKHOUSE_DATABASE}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      NEXTAUTH_URL: "http://localhost:${LANGFUSE_PORT}"
+      SALT: ${LANGFUSE_SALT}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY}
+      NEXT_PUBLIC_HOST: "http://localhost:${LANGFUSE_PORT}"
+    ports: ["${LANGFUSE_PORT}:3000"]
+    restart: unless-stopped
+    profiles: ["observability"]
+
+  # Evals: Promptfoo self-host
+  promptfoo:
+    image: ghcr.io/promptfoo/promptfoo:latest
+    working_dir: /work
+    volumes: ["./promptfoo:/work"]
+    ports: ["${PROMPTFOO_PORT:-15500}:15500"]
+    command: ["promptfoo","view","--port","15500","-n"]
+    environment:
+      HOST: 0.0.0.0
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:15500/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    profiles: ["observability"]
+
+  memmcp-orchestrator:
+    build: { context: ., dockerfile: Dockerfile.orchestrator }
+    depends_on:
+      memorymcp-http:
+        condition: service_healthy
+    environment:
+      MEMMCP_HTTP_URL: http://memorymcp-http:59081/mcp
+      LANGFUSE_URL: http://langfuse:3000
+      LANGFUSE_API_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      QDRANT_URL: http://qdrant:6333
+      ORCH_QDRANT_COLLECTION: memmcp_notes
+    ports: ["${ORCHESTRATOR_PORT:-8075}:8075"]
+    restart: unless-stopped
+    profiles: ["core"]
+
+volumes:
+  qdrant_storage: {}
+  mongo_data: {}
+  mindsdb_data: {}
+  memory_bank_data: {}
+  letta_pg: {}
+  lf_pgdata: {}
+  clickhouse_data: {}

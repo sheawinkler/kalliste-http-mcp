@@ -1,7 +1,8 @@
 {
   "mcpServers": {
-    "hub": {
-      "serverUrl": "http://127.0.0.1:53000/mcp"
+    "memmcp": {
+      "transport": "streamable-http",
+      "serverUrl": "http://127.0.0.1:53130/mcp"
     }
   }
 }
