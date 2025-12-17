@@ -210,9 +210,38 @@ Compose reads `.env` from the **project directory** (the folder of the first `-f
 
 ## Agent Memory Logging (CRITICAL)
 
-When working in this repo, **always log decisions and context** via memMCP before finishing:
+### Global vs Project-Specific Context
+
+memMCP uses a **hierarchical structure** for agent knowledge:
+
+```
+_global/                      # Cross-project protocols & learnings
+├── agent_protocols/          # How ALL agents should behave
+├── shared_learnings/         # Patterns that work across projects
+└── infrastructure/           # Shared deployment/infra decisions
+
+{projectName}/                # Project-specific context
+├── decisions/                # Technical decisions for this project
+├── briefings/                # Session handoffs
+└── conventions/              # Project-specific patterns
+```
+
+### When to Log Where
+
+**Log to `_global/`** when:
+- Updating agent protocols (e.g., new logging convention)
+- Discovering patterns that apply across projects
+- Making infrastructure decisions affecting multiple projects
+
+**Log to `{projectName}/`** when:
+- Making technical decisions specific to this codebase
+- Documenting project-specific test results or deployments
+- Writing session handoffs for this project
+
+### Logging Example
 
 ```bash
+# Project-specific decision
 curl -fsS "$MEMMCP_ORCHESTRATOR_URL/memory/write" \
   -H 'content-type: application/json' \
   -d '{
@@ -220,6 +249,15 @@ curl -fsS "$MEMMCP_ORCHESTRATOR_URL/memory/write" \
     "fileName": "decisions/'$(date +%Y%m%d)'_your_change.txt",
     "content": "- Changed X in file Y\n- Status: tests passed\n- Next: deploy to staging"
   }'
+
+# Global protocol update
+curl -fsS "$MEMMCP_ORCHESTRATOR_URL/memory/write" \
+  -H 'content-type: application/json' \
+  -d '{
+    "projectName": "_global",
+    "fileName": "agent_protocols/testing_standards.md",
+    "content": "# Testing Standards\n\nAll agents should run smoke tests before committing..."
+  }'
 ```
 
-Failure to log means the next agent starts from scratch. See `AGENT_MEM_MCP_INSTRUCTIONS.md` for full protocol.
+Failure to log means the next agent starts from scratch. See `docs/agent_protocols/logging_protocol.md` for full protocol.
